@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage
 from core.state import AgentState
-from core.models import TestCase
+from core.models import TestCase, ProfileResult, PatchResult
 from tools.sandbox import run_code_tool
 
 load_dotenv()
@@ -54,3 +54,26 @@ def evaluator_node(state: AgentState) -> dict:
         return {'status': 'bug_found'}
     else:
         return {'status': 'passed'}
+
+def profiler_node(state: AgentState) -> dict:
+    time_limit = state.get('time_limit')
+    if time_limit is not None and time_limit > 0:
+        return {}
+    
+    profiler_llm = llm.with_structured_output(ProfileResult)
+    prompt = f"You are an algorithmic profiler. Read this code: {state['target_code']}. Estimate a strict time limit in seconds to catch inefficient implementations. Return your reasoning and the estimated_time_limit."
+    
+    result = profiler_llm.invoke([HumanMessage(content=prompt)])
+    print(f"\n[Profiler Reasoning]: {result.reasoning}")
+    
+    return {'time_limit': result.estimated_time_limit}
+
+def auto_patcher_node(state: AgentState) -> dict:
+    patcher_llm = llm.with_structured_output(PatchResult)
+    prompt = f"You are an expert software engineer. The following code failed. \nTarget Code: {state['target_code']} \nFailed Test Case: {state.get('current_test_case', 'None')} \nError Log: {state.get('execution_result', {})} \nWrite a highly optimized, patched version of the code that handles this test case and fixes the time complexity or logic bug. Do not wrap the code in markdown blocks, just return the raw code string."
+    
+    result = patcher_llm.invoke([HumanMessage(content=prompt)])
+    print(f"\n[Auto-Patcher Reasoning]: {result.reasoning}")
+    
+    return {'patched_code': result.patched_code}
+

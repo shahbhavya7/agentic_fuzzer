@@ -10,3 +10,4 @@ class AgentState(TypedDict):
     execution_result: dict
     status: str
     loop_count: int
+    patched_code: str
